@@ -1,24 +1,28 @@
-```text
-    %USERPROFILE%/
-    target/
-    .idea/
-    *.iml
-    .mvn/
-    mvnw
-    mvnw.cmd
-    help.md
-    .DS_Store
-    ### STS ###
-    .apt_generated
-    .classpath
-    .factorypath
-    .project
-    .settings
-    .springBeans
-    sts_settings.yaml
-    ### IntelliJ IDEA ###
-    .idea
-    *.iws
-    *.iml
-    *.ipr
-    ```
+# Secret credentials - NEVER commit
+application-secret.properties
+**/application-secret.properties
+
+%USERPROFILE%/
+target/
+.idea/
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
+help.md
+.DS_Store
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+sts_settings.yaml
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
