@@ -420,7 +420,7 @@
     // --- 1. CONFIGURE COGNITO ---
     const COGNITO_DOMAIN = "https://ap-south-1xyqucmi70.auth.ap-south-1.amazoncognito.com";
     const CLIENT_ID = "6709qk8smq8nj627kdfln63tjf";
-    const REDIRECT_URI = "https://localhost:8080";
+    const REDIRECT_URI = "http://localhost:5000";
 
     // Build Login/Signup URLs
     const authParams = `client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=email+openid`;
@@ -438,7 +438,6 @@
         const savedPhoto = localStorage.getItem('userProfilePhoto');
         if (savedPhoto) {
             document.getElementById('profileImage').src = savedPhoto;
-            document.getElementById('removeProfileBtn').style.display = 'flex';
         }
 
         const hash = window.location.hash;
@@ -651,7 +650,6 @@
             document.getElementById('profileImage').src = canvas.toDataURL();
             document.getElementById('profileViewImage').src = canvas.toDataURL();
             localStorage.setItem('userProfilePhoto', canvas.toDataURL());
-            document.getElementById('removeProfileBtn').style.display = 'flex';
             const modal = bootstrap.Modal.getInstance(document.getElementById('cropModal'));
             if(modal) modal.hide();
             document.getElementById('profileUpload').value = '';
@@ -669,7 +667,6 @@
     function removeProfilePhoto() {
         document.getElementById('profileImage').src = 'https://via.placeholder.com/150/cccccc/ffffff?text=User';
         document.getElementById('profileViewImage').src = 'https://via.placeholder.com/300/cccccc/ffffff?text=User';
-        document.getElementById('removeProfileBtn').style.display = 'none';
         localStorage.removeItem('userProfilePhoto');
         fetch("/api/profile/remove", {method:"DELETE", headers:{"Authorization":"Bearer "+token}}).catch(e => console.log(e));
     }
