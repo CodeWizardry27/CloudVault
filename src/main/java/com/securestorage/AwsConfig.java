@@ -19,10 +19,10 @@ public class AwsConfig {
     @Value("${aws.region}")
     private String region;
 
-    @Value("${cloudvault.aws.key}")
+    @Value("${CLOUDVAULT_KEY:}")
     private String accessKey;
 
-    @Value("${cloudvault.aws.secret}")
+    @Value("${CLOUDVAULT_SECRET:}")
     private String secretKey;
 
     @Value("${aws.sessionToken:#{null}}")
