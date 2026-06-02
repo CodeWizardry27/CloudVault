@@ -31,6 +31,7 @@ public class FileService {
     private final S3Client s3Client;
     private final DynamoDbEnhancedClient dynamoDb;
     private final EncryptionService encryptionService;
+    private final AiService aiService;
 
     @Value("${aws.s3.bucket}")
     private String bucketName;
@@ -38,10 +39,11 @@ public class FileService {
     @Value("${aws.dynamodb.table}")
     private String tableName;
 
-    public FileService(S3Client s3Client, DynamoDbEnhancedClient dynamoDb, EncryptionService encryptionService) {
+    public FileService(S3Client s3Client, DynamoDbEnhancedClient dynamoDb, EncryptionService encryptionService, AiService aiService) {
         this.s3Client = s3Client;
         this.dynamoDb = dynamoDb;
         this.encryptionService = encryptionService;
+        this.aiService = aiService;
     }
 
     // 1. Define the limit (200 MB in bytes)
@@ -62,7 +64,16 @@ public class FileService {
         String fileId = UUID.randomUUID().toString();
         String s3Key = ownerId + "/" + fileId;
 
-        // 2. Encryption Logic
+        // 2. AI Smart Tagging (BEFORE encryption, while file is still readable)
+        String aiTags = "";
+        try {
+            aiTags = aiService.generateTags(file.getBytes(), file.getContentType(), file.getOriginalFilename());
+            logger.info("AI generated tags for '{}': {}", file.getOriginalFilename(), aiTags);
+        } catch (Exception e) {
+            logger.warn("AI tagging failed, continuing upload without tags: {}", e.getMessage());
+        }
+
+        // 3. Encryption Logic
         SecretKey aesKey = encryptionService.generateAesKey();
         byte[] iv = encryptionService.generateIv();
         byte[] encryptedContent = encryptionService.encryptData(file.getBytes(), aesKey, iv);
@@ -84,6 +95,9 @@ public class FileService {
                 newFileSize // <--- Saving the size now
         );
         
+        // Set AI tags
+        entity.setAiTags(aiTags);
+
         // Explicitly set the partition key to ensure it's not null
         entity.setFileId(fileId);
         
@@ -210,6 +224,16 @@ public class FileService {
                         // No profile photo or already deleted
                 }
         }
+
+    // Update file metadata in DynamoDB (used to cache AI summaries)
+    public void updateFileMetadata(FileEntity entity) {
+        try {
+            dynamoDb.table(tableName, TableSchema.fromBean(FileEntity.class)).putItem(entity);
+            logger.info("Updated metadata for file_id={}", entity.getFileId());
+        } catch (Exception e) {
+            logger.error("Failed to update metadata for file_id={}: {}", entity.getFileId(), e.getMessage());
+        }
+    }
 
 
 }

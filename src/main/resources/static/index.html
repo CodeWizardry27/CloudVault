@@ -112,6 +112,49 @@
         }
         .upload-circle:hover { transform: scale(1.05); }
         .upload-circle i { font-size: 3rem; }
+
+        /* AI Tag Badges */
+        .ai-tag {
+            display: inline-block;
+            padding: 2px 10px;
+            margin: 2px 3px;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #a7f3d0, #6ee7b7);
+            color: #065f46;
+            letter-spacing: 0.3px;
+        }
+        .ai-tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            margin-top: 4px;
+        }
+        .btn-ai-summarize {
+            background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 4px 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .btn-ai-summarize:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+            color: white;
+        }
+        .summary-content {
+            background: linear-gradient(135deg, #f5f3ff, #ede9fe);
+            border-left: 4px solid #8b5cf6;
+            border-radius: 12px;
+            padding: 20px;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: #374151;
+        }
     </style>
 </head>
 
@@ -335,6 +378,27 @@
     </div>
 </div>
 
+<!-- AI Summary Modal -->
+<div class="modal fade" id="aiSummaryModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content p-4 shadow-lg">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="fw-bold"><span style="background: linear-gradient(135deg, #8b5cf6, #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">✨ AI Summary</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2" id="summaryFilename"></p>
+                <div id="summaryContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-purple" role="status"></div>
+                        <p class="text-muted mt-3 small">Decrypting & analyzing with AI...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- View Profile Modal -->
 <div class="modal fade" id="profileViewModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -527,6 +591,38 @@
         } catch(e) { alert("Download failed"); }
     }
 
+    // --- AI SUMMARY ---
+    async function summarizeFile(fileId, filename) {
+        const modal = new bootstrap.Modal(document.getElementById('aiSummaryModal'));
+        document.getElementById('summaryFilename').innerText = filename;
+        document.getElementById('summaryContent').innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border" style="color: #8b5cf6;" role="status"></div>
+                <p class="text-muted mt-3 small">Decrypting & analyzing with AI...</p>
+            </div>`;
+        modal.show();
+
+        try {
+            const res = await fetch(`/api/files/${fileId}/summary`, {
+                headers: { "Authorization": "Bearer " + token }
+            });
+            const data = await res.json();
+
+            if (data.error) {
+                document.getElementById('summaryContent').innerHTML = `<div class="alert alert-warning">${data.error}</div>`;
+            } else {
+                const cachedBadge = data.cached === 'true' ? '<span class="badge bg-light text-muted ms-2" style="font-size:0.65rem;">cached</span>' : '<span class="badge bg-light text-success ms-2" style="font-size:0.65rem;">fresh</span>';
+                document.getElementById('summaryContent').innerHTML = `
+                    <div class="summary-content">
+                        ${data.summary}
+                    </div>
+                    <div class="mt-2 text-end">${cachedBadge}</div>`;
+            }
+        } catch(e) {
+            document.getElementById('summaryContent').innerHTML = `<div class="alert alert-danger">Failed to generate summary: ${e.message}</div>`;
+        }
+    }
+
     // --- UI HELPERS ---
     function updateCounts() {
         const counts = { image: 0, video: 0, audio: 0, application: 0, other: 0 };
@@ -561,7 +657,30 @@
             else if(f.contentType.startsWith('video')) { icon = '<i class="bi bi-file-play text-danger"></i>'; btn = `<button class="btn btn-sm btn-light text-danger border me-2" onclick="openMedia('${f.fileId}', '${f.contentType}', '${f.filename}')">Play</button>`; }
             else if(f.contentType.startsWith('audio')) { icon = '<i class="bi bi-file-music text-purple"></i>'; btn = `<button class="btn btn-sm btn-light text-purple border me-2" onclick="openMedia('${f.fileId}', '${f.contentType}', '${f.filename}')">Play</button>`; }
             else if(f.contentType === 'application/pdf') { icon = '<i class="bi bi-file-pdf text-danger"></i>'; btn = `<button class="btn btn-sm btn-light text-danger border me-2" onclick="openMedia('${f.fileId}', '${f.contentType}', '${f.filename}')">Read</button>`; }
-            container.innerHTML += `<div class="list-group-item d-flex align-items-center justify-content-between p-3 border mb-2 rounded-3 hover-shadow"><div class="d-flex align-items-center"><div class="me-3 fs-3">${icon}</div><div class="text-truncate" style="max-width: 200px;"><div class="fw-bold text-dark">${f.filename}</div><div class="small text-muted">${f.contentType}</div></div></div><div class="d-flex align-items-center">${btn}<button class="btn btn-sm btn-light border rounded-circle me-2" onclick="downloadFile('${f.fileId}', '${f.filename}')"><i class="bi bi-download"></i></button><button class="btn btn-sm btn-light text-danger border rounded-circle" onclick="requestDelete('${f.fileId}')"><i class="bi bi-trash"></i></button></div></div>`;
+
+            // Build AI tags HTML
+            let tagsHtml = '';
+            if (f.aiTags && f.aiTags.trim() !== '') {
+                const tags = f.aiTags.split(',').map(t => t.trim()).filter(t => t.length > 0);
+                tagsHtml = '<div class="ai-tags-row">' + tags.map(t => `<span class="ai-tag">${t}</span>`).join('') + '</div>';
+            }
+
+            container.innerHTML += `<div class="list-group-item d-flex align-items-center justify-content-between p-3 border mb-2 rounded-3 hover-shadow">
+                <div class="d-flex align-items-center">
+                    <div class="me-3 fs-3">${icon}</div>
+                    <div style="max-width: 250px;">
+                        <div class="fw-bold text-dark text-truncate">${f.filename}</div>
+                        <div class="small text-muted">${f.contentType}</div>
+                        ${tagsHtml}
+                    </div>
+                </div>
+                <div class="d-flex align-items-center flex-wrap gap-1">
+                    <button class="btn btn-ai-summarize me-1" onclick="summarizeFile('${f.fileId}', '${f.filename}')" title="AI Summary">✨ Summarize</button>
+                    ${btn}
+                    <button class="btn btn-sm btn-light border rounded-circle me-1" onclick="downloadFile('${f.fileId}', '${f.filename}')"><i class="bi bi-download"></i></button>
+                    <button class="btn btn-sm btn-light text-danger border rounded-circle" onclick="requestDelete('${f.fileId}')"><i class="bi bi-trash"></i></button>
+                </div>
+            </div>`;
         });
     }
 

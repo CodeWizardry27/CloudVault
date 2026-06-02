@@ -14,6 +14,8 @@ public class FileEntity {
     private String iv;
     private String contentType;
     private Long fileSize;
+    private String aiTags;
+    private String aiSummary;
 
     public FileEntity() {
     }
@@ -53,4 +55,10 @@ public class FileEntity {
 
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+
+    public String getAiTags() { return aiTags; }
+    public void setAiTags(String aiTags) { this.aiTags = aiTags; }
+
+    public String getAiSummary() { return aiSummary; }
+    public void setAiSummary(String aiSummary) { this.aiSummary = aiSummary; }
 }
