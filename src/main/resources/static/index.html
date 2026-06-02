@@ -484,7 +484,7 @@
     // --- 1. CONFIGURE COGNITO ---
     const COGNITO_DOMAIN = "https://ap-south-10cuyr2m9i.auth.ap-south-1.amazoncognito.com";
     const CLIENT_ID = "7d4d5ifsbov47m4mba6bj6vu9p";
-    const REDIRECT_URI = "http://localhost:5000";
+    const REDIRECT_URI = window.location.origin;
 
     // Build Login/Signup URLs
     const authParams = `client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=email+openid`;
