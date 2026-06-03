@@ -64,18 +64,25 @@ public class FileController {
                 return ResponseEntity.status(403).body(Map.of("error", "Unauthorized access"));
             }
 
-            // Check if summary is already cached
-            if (entity.getAiSummary() != null && !entity.getAiSummary().isEmpty()) {
-                return ResponseEntity.ok(Map.of("summary", entity.getAiSummary(), "cached", "true"));
+            // Check if summary is already cached (skip if it contains error messages)
+            String cachedSummary = entity.getAiSummary();
+            if (cachedSummary != null && !cachedSummary.isEmpty()
+                    && !cachedSummary.contains("Failed to generate")
+                    && !cachedSummary.contains("Too Many Requests")
+                    && !cachedSummary.contains("RESOURCE_EXHAUSTED")
+                    && !cachedSummary.contains("quota")) {
+                return ResponseEntity.ok(Map.of("summary", cachedSummary, "cached", "true"));
             }
 
             // Decrypt the file and generate summary
             byte[] decryptedContent = fileService.downloadFile(id);
             String summary = aiService.generateSummary(decryptedContent, entity.getContentType(), entity.getFilename());
 
-            // Cache the summary in DynamoDB for future requests
-            entity.setAiSummary(summary);
-            fileService.updateFileMetadata(entity);
+            // Only cache successful summaries (not error messages)
+            if (!summary.contains("Failed to generate") && !summary.contains("unavailable")) {
+                entity.setAiSummary(summary);
+                fileService.updateFileMetadata(entity);
+            }
 
             return ResponseEntity.ok(Map.of("summary", summary, "cached", "false"));
         } catch (Exception e) {
