@@ -7,7 +7,6 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -16,12 +15,13 @@ public class AiService {
 
     private static final Logger logger = LoggerFactory.getLogger(AiService.class);
 
-    @Value("${GEMINI_API_KEY:}")
+    @Value("${GROQ_API_KEY:}")
     private String apiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    private static final String GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+    private static final String GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
+    private static final String MODEL = "llama-3.3-70b-versatile";
 
     /**
      * Generate smart tags for a file during upload (before encryption).
@@ -29,22 +29,21 @@ public class AiService {
      */
     public String generateTags(byte[] fileContent, String contentType, String filename) {
         if (apiKey == null || apiKey.isEmpty()) {
-            logger.warn("Gemini API key not configured, skipping AI tagging");
+            logger.warn("Groq API key not configured, skipping AI tagging");
             return "";
         }
 
         try {
             if (contentType != null && contentType.startsWith("image/")) {
-                return generateImageTags(fileContent, contentType);
+                // Groq text models can't analyze images directly, use filename-based tags
+                return generateFilenameOnlyTags(filename, contentType);
             } else if (isTextBasedFile(contentType, filename)) {
                 String textContent = new String(fileContent);
-                // Limit text to 4000 chars to stay within API limits
                 if (textContent.length() > 4000) {
                     textContent = textContent.substring(0, 4000);
                 }
                 return generateTextTags(textContent, filename);
             } else {
-                // For unsupported file types, generate tags based on filename only
                 return generateFilenameOnlyTags(filename, contentType);
             }
         } catch (Exception e) {
@@ -64,7 +63,7 @@ public class AiService {
 
         try {
             if (contentType != null && contentType.startsWith("image/")) {
-                return generateImageSummary(fileContent, contentType);
+                return "Image summary: This is an image file named '" + filename + "'. Upload a text-based document to get a detailed AI summary.";
             } else if (isTextBasedFile(contentType, filename)) {
                 String textContent = new String(fileContent);
                 if (textContent.length() > 8000) {
@@ -82,110 +81,54 @@ public class AiService {
 
     // ========== PRIVATE METHODS ==========
 
-    private String generateImageTags(byte[] imageBytes, String contentType) {
-        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-        Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of(
-                "parts", List.of(
-                    Map.of(
-                        "inlineData", Map.of(
-                            "mimeType", contentType,
-                            "data", base64Image
-                        )
-                    ),
-                    Map.of("text", "Analyze this image and provide exactly 3-5 short descriptive tags that categorize it. " +
-                            "Return ONLY the tags as a comma-separated list, nothing else. " +
-                            "Example: landscape, nature, mountains, sunset")
-                )
-            ))
-        );
-
-        return callGeminiApi(requestBody);
-    }
-
-    private String generateImageSummary(byte[] imageBytes, String contentType) {
-        String base64Image = Base64.getEncoder().encodeToString(imageBytes);
-
-        Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of(
-                "parts", List.of(
-                    Map.of(
-                        "inlineData", Map.of(
-                            "mimeType", contentType,
-                            "data", base64Image
-                        )
-                    ),
-                    Map.of("text", "Describe this image in 2-3 clear sentences. Focus on what the image shows, " +
-                            "the key subjects, and any notable details.")
-                )
-            ))
-        );
-
-        return callGeminiApi(requestBody);
-    }
-
     private String generateTextTags(String textContent, String filename) {
-        Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of(
-                "parts", List.of(
-                    Map.of("text", "Analyze the following document (filename: " + filename + ") and provide exactly 3-5 short descriptive tags " +
-                            "that categorize its content. Return ONLY the tags as a comma-separated list, nothing else.\n\n" +
-                            "Document content:\n" + textContent)
-                )
-            ))
-        );
-
-        return callGeminiApi(requestBody);
+        String prompt = "Analyze the following document (filename: " + filename + ") and provide exactly 3-5 short descriptive tags " +
+                "that categorize its content. Return ONLY the tags as a comma-separated list, nothing else.\n\n" +
+                "Document content:\n" + textContent;
+        return callGroqApi(prompt);
     }
 
     private String generateTextSummary(String textContent, String filename) {
-        Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of(
-                "parts", List.of(
-                    Map.of("text", "Summarize the following document (filename: " + filename + ") in 2-3 clear, concise sentences. " +
-                            "Focus on the main topic and key points.\n\n" +
-                            "Document content:\n" + textContent)
-                )
-            ))
-        );
-
-        return callGeminiApi(requestBody);
+        String prompt = "Summarize the following document (filename: " + filename + ") in 2-3 clear, concise sentences. " +
+                "Focus on the main topic and key points.\n\n" +
+                "Document content:\n" + textContent;
+        return callGroqApi(prompt);
     }
 
     private String generateFilenameOnlyTags(String filename, String contentType) {
-        Map<String, Object> requestBody = Map.of(
-            "contents", List.of(Map.of(
-                "parts", List.of(
-                    Map.of("text", "Based on this filename and content type, provide 2-3 short descriptive tags. " +
-                            "Return ONLY the tags as a comma-separated list.\n" +
-                            "Filename: " + filename + "\nContent-Type: " + contentType)
-                )
-            ))
-        );
-
-        return callGeminiApi(requestBody);
+        String prompt = "Based on this filename and content type, provide 2-3 short descriptive tags. " +
+                "Return ONLY the tags as a comma-separated list, nothing else.\n" +
+                "Filename: " + filename + "\nContent-Type: " + contentType;
+        return callGroqApi(prompt);
     }
 
     @SuppressWarnings("unchecked")
-    private String callGeminiApi(Map<String, Object> requestBody) {
-        String url = GEMINI_URL + "?key=" + apiKey;
-
+    private String callGroqApi(String prompt) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiKey);
+
+        Map<String, Object> requestBody = Map.of(
+            "model", MODEL,
+            "messages", List.of(
+                Map.of("role", "system", "content", "You are a helpful file analysis assistant. Be concise and precise."),
+                Map.of("role", "user", "content", prompt)
+            ),
+            "temperature", 0.3,
+            "max_tokens", 200
+        );
 
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-        ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+        ResponseEntity<Map> response = restTemplate.postForEntity(GROQ_URL, entity, Map.class);
 
         if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
             Map<String, Object> body = response.getBody();
-            List<Map<String, Object>> candidates = (List<Map<String, Object>>) body.get("candidates");
-            if (candidates != null && !candidates.isEmpty()) {
-                Map<String, Object> content = (Map<String, Object>) candidates.get(0).get("content");
-                List<Map<String, Object>> parts = (List<Map<String, Object>>) content.get("parts");
-                if (parts != null && !parts.isEmpty()) {
-                    return ((String) parts.get(0).get("text")).trim();
+            List<Map<String, Object>> choices = (List<Map<String, Object>>) body.get("choices");
+            if (choices != null && !choices.isEmpty()) {
+                Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
+                if (message != null) {
+                    return ((String) message.get("content")).trim();
                 }
             }
         }
